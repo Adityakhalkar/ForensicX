@@ -1,48 +1,59 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getArtifactUrl, getRunResults, getRunStatus } from "../api/client";
+import { useRunStatus, useRunResults } from "../hooks/useRuns";
+import { useRunProgress } from "../hooks/useRunProgress";
+import { filesApi } from "../api/client";
 import { DisclaimerBanner } from "../components/DisclaimerBanner";
 
-type RunResults = {
-  run: { status: string; progress: number; error_message?: string | null };
-  outputs: { model_name: string; output_path: string; diff_path?: string | null; roi_compare_path?: string | null }[];
-  metrics: {
-    model_name: string;
-    psnr?: number | null;
-    lpips?: number | null;
-    ssim?: number | null;
-    ocr_json: {
-      available?: boolean;
-      text?: string;
-      confidence?: number | null;
-      normalized_edit_distance?: number | null;
-      note?: string | null;
-    };
-    face_json: {
-      available?: boolean;
-      score?: number | null;
-      note?: string | null;
-    };
-  }[];
-  disclaimer: string;
-};
-
 function fmtMetric(value: number | null | undefined, digits = 4): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "Not computed";
-  }
+  if (value === null || value === undefined || !Number.isFinite(value)) return "Not computed";
   return value.toFixed(digits);
+}
+
+function ArtifactImage({ path, alt }: { path: string; alt: string }) {
+  const [src, setSrc] = useState<string>("");
+  useEffect(() => {
+    let revoke: string | null = null;
+    filesApi.getArtifactUrl(path).then((url) => {
+      revoke = url;
+      setSrc(url);
+    }).catch(() => {});
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+  }, [path]);
+  if (!src) return <div className="hint">Loading image...</div>;
+  return <img src={src} alt={alt} />;
 }
 
 function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; afterPath: string; title: string }) {
   const [position, setPosition] = useState(50);
+  const [beforeSrc, setBeforeSrc] = useState("");
+  const [afterSrc, setAfterSrc] = useState("");
+
+  useEffect(() => {
+    let revokeBefore: string | null = null;
+    let revokeAfter: string | null = null;
+    filesApi.getArtifactUrl(beforePath).then((url) => { revokeBefore = url; setBeforeSrc(url); }).catch(() => {});
+    filesApi.getArtifactUrl(afterPath).then((url) => { revokeAfter = url; setAfterSrc(url); }).catch(() => {});
+    return () => {
+      if (revokeBefore) URL.revokeObjectURL(revokeBefore);
+      if (revokeAfter) URL.revokeObjectURL(revokeAfter);
+    };
+  }, [beforePath, afterPath]);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowLeft") setPosition((p) => Math.max(0, p - 2));
+    if (e.key === "ArrowRight") setPosition((p) => Math.min(100, p + 2));
+  }
+
+  if (!beforeSrc || !afterSrc) return <div className="hint">Loading comparison...</div>;
+
   return (
     <div>
       <small>{title}</small>
       <div className="compare-slider" style={{ ["--split" as string]: `${position}%` }}>
-        <img src={getArtifactUrl(beforePath)} alt={`${title} baseline`} />
+        <img src={beforeSrc} alt={`${title} baseline`} />
         <div className="compare-after">
-          <img src={getArtifactUrl(afterPath)} alt={`${title} enhanced`} />
+          <img src={afterSrc} alt={`${title} enhanced`} />
         </div>
         <div className="compare-handle" />
       </div>
@@ -52,7 +63,9 @@ function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; a
         max={100}
         value={position}
         onChange={(e) => setPosition(Number(e.target.value))}
+        onKeyDown={handleKeyDown}
         className="compare-range"
+        aria-label={`${title} comparison slider`}
       />
     </div>
   );
@@ -61,39 +74,32 @@ function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; a
 export function MetricsPage() {
   const { runId } = useParams();
   const id = Number(runId);
-  const [status, setStatus] = useState<{ status: string; progress: number; error_message?: string | null } | null>(null);
-  const [results, setResults] = useState<RunResults | null>(null);
-  const [error, setError] = useState("");
-  const bicubicOutput = results?.outputs.find((o) => o.model_name === "bicubic");
+  const { data: status } = useRunStatus(id);
+  const isComplete = status?.status === "completed";
+  const isFailed = status?.status === "failed";
+  const { data: results } = useRunResults(id, isComplete);
 
-  useEffect(() => {
-    let timer: number | undefined;
-    async function poll() {
-      try {
-        const s = await getRunStatus(id);
-        setStatus(s);
-        if (s.status === "completed") {
-          setResults(await getRunResults(id));
-        } else if (s.status === "running" || s.status === "queued") {
-          timer = window.setTimeout(() => {
-            void poll();
-          }, 1500);
-        }
-      } catch (e) {
-        setError(String(e));
-      }
-    }
-    void poll();
-    return () => {
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [id]);
+  // SSE for real-time progress
+  useRunProgress(id);
+
+  const bicubicOutput = results?.outputs.find((o) => o.model_name === "bicubic");
 
   return (
     <section className="card panel">
       <h2>Run Metrics</h2>
       <DisclaimerBanner />
-      {status ? <p className="selected-pill">Status: {status.status} ({status.progress}%)</p> : null}
+      {status ? (
+        <div className="selected-pill">
+          Status: {status.status} ({status.progress}%)
+          {!isComplete && !isFailed ? (
+            <div className="progress-bar-container">
+              <div className="progress-bar" style={{ width: `${status.progress}%` }} />
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="hint">Loading run status...</p>
+      )}
       {status?.error_message ? <pre className="error">{status.error_message}</pre> : null}
       {results ? (
         <div className="grid metrics-grid">
@@ -106,7 +112,7 @@ export function MetricsPage() {
                   <div className="artifact-grid">
                     <div>
                       <small>Output</small>
-                      <img src={getArtifactUrl(o.output_path)} alt={`${o.model_name} output`} />
+                      <ArtifactImage path={o.output_path} alt={`${o.model_name} output`} />
                     </div>
                     {bicubicOutput && o.model_name !== "bicubic" ? (
                       <CompareSlider
@@ -118,13 +124,13 @@ export function MetricsPage() {
                     {o.diff_path ? (
                       <div>
                         <small>Diff</small>
-                        <img src={getArtifactUrl(o.diff_path)} alt={`${o.model_name} diff`} />
+                        <ArtifactImage path={o.diff_path} alt={`${o.model_name} diff`} />
                       </div>
                     ) : null}
                     {o.roi_compare_path ? (
                       <div>
                         <small>ROI</small>
-                        <img src={getArtifactUrl(o.roi_compare_path)} alt={`${o.model_name} roi compare`} />
+                        <ArtifactImage path={o.roi_compare_path} alt={`${o.model_name} roi compare`} />
                       </div>
                     ) : null}
                   </div>
@@ -152,10 +158,7 @@ export function MetricsPage() {
                   </div>
                   {m.ocr_json.available ? (
                     <small className="hint">
-                      OCR confidence:{" "}
-                      {m.ocr_json.confidence === null || m.ocr_json.confidence === undefined
-                        ? "N/A"
-                        : m.ocr_json.confidence.toFixed(2)}
+                      OCR confidence: {m.ocr_json.confidence == null ? "N/A" : m.ocr_json.confidence.toFixed(2)}
                     </small>
                   ) : null}
                   <div>
@@ -170,7 +173,6 @@ export function MetricsPage() {
           </section>
         </div>
       ) : null}
-      {error ? <pre className="error">{error}</pre> : null}
     </section>
   );
 }

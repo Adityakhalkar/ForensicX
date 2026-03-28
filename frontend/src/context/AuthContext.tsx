@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { authApi, setAuthErrorHandler, setTokenGetter } from "../api/client";
-import type { ApiError } from "../api/types";
 
 interface AuthState {
   token: string | null;

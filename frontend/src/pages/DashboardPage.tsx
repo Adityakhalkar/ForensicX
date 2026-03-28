@@ -1,37 +1,23 @@
-import { FormEvent, useEffect, useState } from "react";
-import { CaseItem, createCase, listCases } from "../api/client";
+import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useCases, useCreateCase } from "../hooks/useCases";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [cases, setCases] = useState<CaseItem[]>([]);
+  const { data: cases, isLoading, error: fetchError } = useCases();
+  const createCase = useCreateCase();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [error, setError] = useState("");
-
-  async function loadCases() {
-    try {
-      setCases(await listCases());
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  useEffect(() => {
-    void loadCases();
-  }, []);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    setError("");
     try {
-      const created = await createCase(title, description);
+      const created = await createCase.mutateAsync({ title, description: description || undefined });
       setTitle("");
       setDescription("");
-      await loadCases();
       navigate(`/cases/${created.id}`);
-    } catch (e) {
-      setError(String(e));
+    } catch {
+      // error is available via createCase.error
     }
   }
 
@@ -45,24 +31,26 @@ export function DashboardPage() {
           <input value={title} onChange={(e) => setTitle(e.target.value)} required />
           <label>Description</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
-          <button type="submit">Create</button>
+          <button type="submit" disabled={createCase.isPending}>
+            {createCase.isPending ? "Creating..." : "Create"}
+          </button>
         </form>
+        {createCase.error ? <pre className="error">{(createCase.error as any).message ?? String(createCase.error)}</pre> : null}
       </section>
 
       <section className="card panel">
         <h2>Cases</h2>
+        {isLoading ? <p className="hint">Loading cases...</p> : null}
         <ul className="list">
-          {cases.map((item) => (
+          {cases?.map((item) => (
             <li key={item.id}>
-              <Link className="item-link" to={`/cases/${item.id}`}>
-                {item.title}
-              </Link>
+              <Link className="item-link" to={`/cases/${item.id}`}>{item.title}</Link>
               <span className="muted">{new Date(item.created_at).toLocaleString()}</span>
             </li>
           ))}
         </ul>
-        {cases.length === 0 ? <small className="hint">No cases yet. Create your first case to begin.</small> : null}
-        {error ? <pre className="error">{error}</pre> : null}
+        {cases && cases.length === 0 ? <small className="hint">No cases yet. Create your first case to begin.</small> : null}
+        {fetchError ? <pre className="error">{(fetchError as any).message ?? String(fetchError)}</pre> : null}
       </section>
     </div>
   );
