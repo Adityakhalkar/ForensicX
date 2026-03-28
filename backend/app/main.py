@@ -19,6 +19,8 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         ensure_storage_dirs()
+        # For development: auto-create tables if DB doesn't exist yet.
+        # In production, use: alembic upgrade head
         Base.metadata.create_all(bind=engine)
         yield
 
