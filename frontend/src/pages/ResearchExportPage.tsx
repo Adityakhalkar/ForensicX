@@ -1,6 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useCreateExperiment, useExperimentSummary, useGenerateReport } from "../hooks/useExperiments";
-import { experimentsApi, reportsApi } from "../api/client";
+import { useCreateExperiment, useExperimentSummary, useGenerateReport, useDownloadCsvBlob, useDownloadReportBlob } from "../hooks/useExperiments";
 
 export function ResearchExportPage() {
   const [datasetPath, setDatasetPath] = useState("");
@@ -11,6 +10,8 @@ export function ResearchExportPage() {
   const createExperiment = useCreateExperiment();
   const { data: summary, refetch: refreshSummary } = useExperimentSummary(experimentId);
   const generateReport = useGenerateReport();
+  const downloadCsv = useDownloadCsvBlob();
+  const downloadReport = useDownloadReportBlob();
 
   async function startExperiment(event: FormEvent) {
     event.preventDefault();
@@ -36,7 +37,7 @@ export function ResearchExportPage() {
   async function handleDownloadCsv() {
     if (!experimentId) return;
     try {
-      const blobUrl = await experimentsApi.getCsvBlob(experimentId);
+      const blobUrl = await downloadCsv.mutateAsync(experimentId);
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `experiment_${experimentId}_results.csv`;
@@ -63,7 +64,7 @@ export function ResearchExportPage() {
   async function handleDownloadReport() {
     if (!reportId) return;
     try {
-      const blobUrl = await reportsApi.getBlob(reportId);
+      const blobUrl = await downloadReport.mutateAsync(reportId);
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `report_${reportId}.md`;
@@ -98,7 +99,9 @@ export function ResearchExportPage() {
           </div>
           <div className="row">
             <button onClick={() => void refreshSummary()}>Refresh Summary</button>
-            <button onClick={handleDownloadCsv} disabled={!summary?.csv_path}>Download CSV</button>
+            <button onClick={handleDownloadCsv} disabled={!summary?.csv_path || downloadCsv.isPending}>
+              {downloadCsv.isPending ? "Downloading..." : "Download CSV"}
+            </button>
             <button onClick={handleGenerateReport} disabled={generateReport.isPending}>
               {generateReport.isPending ? "Generating..." : "Generate Report"}
             </button>
@@ -124,7 +127,9 @@ export function ResearchExportPage() {
 
       {reportId ? (
         <p className="success-inline">
-          Report ready. <button className="link-btn" onClick={handleDownloadReport}>Download</button>
+          Report ready. <button className="link-btn" onClick={handleDownloadReport}>
+            {downloadReport.isPending ? "Downloading..." : "Download"}
+          </button>
         </p>
       ) : null}
 

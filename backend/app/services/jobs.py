@@ -149,7 +149,7 @@ class JobManager:
                 run.error_message = str(exc)
                 run.completed_at = datetime.now(timezone.utc)
                 db.commit()
-                update_run_progress(run_id, 0, "failed", str(exc))
+                update_run_progress(run_id, run.progress if run else 0, "failed", str(exc))
         finally:
             db.close()
 

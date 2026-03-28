@@ -21,3 +21,15 @@ export function useGenerateReport() {
     mutationFn: (data: GenerateReportRequest) => reportsApi.generate(data),
   });
 }
+
+export function useDownloadCsvBlob() {
+  return useMutation({
+    mutationFn: (id: number) => experimentsApi.getCsvBlob(id),
+  });
+}
+
+export function useDownloadReportBlob() {
+  return useMutation({
+    mutationFn: (id: number) => reportsApi.getBlob(id),
+  });
+}

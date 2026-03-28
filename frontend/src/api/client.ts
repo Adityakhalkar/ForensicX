@@ -37,7 +37,7 @@ export function setTokenGetter(getter: () => string | null) {
 // --- Error normalization ---
 
 function isApiError(value: unknown): value is ApiError {
-  return typeof value === "object" && value !== null && "message" in value;
+  return typeof value === "object" && value !== null && "status" in value && "message" in value;
 }
 
 async function parseError(response: Response): Promise<ApiError> {
