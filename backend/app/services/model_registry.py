@@ -8,6 +8,7 @@ import torch
 from app.core.config import settings
 from app.ml.generator import Generator
 from app.ml.realesrgan_x4v3 import SRVGGNetCompact
+from app.ml.rrdbnet import RRDBNet
 
 
 def resolve_device() -> torch.device:
@@ -52,6 +53,16 @@ def get_realesrgan() -> tuple[SRVGGNetCompact, torch.device]:
     wdn = _load_state(settings.REALESRGAN_WDN_X4_WEIGHTS)
     alpha = settings.DENOISE_STRENGTH
     state = _blend_states(general, wdn, alpha, 1.0 - alpha)
+    model.load_state_dict(state, strict=True)
+    model.eval().to(device)
+    return model, device
+
+
+@lru_cache(maxsize=1)
+def get_realesrgan_x4plus() -> tuple[RRDBNet, torch.device]:
+    device = resolve_device()
+    model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+    state = _load_state(settings.REALESRGAN_X4PLUS_WEIGHTS)
     model.load_state_dict(state, strict=True)
     model.eval().to(device)
     return model, device

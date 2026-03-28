@@ -21,6 +21,7 @@ export function RunComparisonPage() {
   const [includeSrgan, setIncludeSrgan] = useState(true);
   const [includeRealesr, setIncludeRealesr] = useState(true);
   const [includeBicubic, setIncludeBicubic] = useState(true);
+  const [includeX4plus, setIncludeX4plus] = useState(true);
   const [referenceImageId, setReferenceImageId] = useState("");
   const [faceReferenceImageId, setFaceReferenceImageId] = useState("");
   const [referenceText, setReferenceText] = useState("");
@@ -51,6 +52,7 @@ export function RunComparisonPage() {
     if (includeSrgan) models.push("srgan");
     if (includeRealesr) models.push("realesrgan");
     if (includeBicubic) models.push("bicubic");
+    if (includeX4plus) models.push("realesrgan_x4plus");
     if (models.length === 0) {
       setError("Select at least one model.");
       return;
@@ -107,6 +109,9 @@ export function RunComparisonPage() {
         </label>
         <label className="check-row">
           <input type="checkbox" checked={includeBicubic} onChange={(e) => setIncludeBicubic(e.target.checked)} /> Bicubic
+        </label>
+        <label className="check-row">
+          <input type="checkbox" checked={includeX4plus} onChange={(e) => setIncludeX4plus(e.target.checked)} /> Real-ESRGAN x4plus (best quality)
         </label>
         <label>Image Preprocessing</label>
         <select value={preprocess} onChange={(e) => setPreprocess(e.target.value)}>

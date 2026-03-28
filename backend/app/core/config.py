@@ -26,11 +26,17 @@ class Settings:
     SRGAN_WEIGHTS = ROOT_DIR / "weights" / "srgan_generator.pth"
     REALESRGAN_X4_WEIGHTS = ROOT_DIR / "weights" / "realesr-general-x4v3.pth"
     REALESRGAN_WDN_X4_WEIGHTS = ROOT_DIR / "weights" / "realesr-general-wdn-x4v3.pth"
+    REALESRGAN_X4PLUS_WEIGHTS = ROOT_DIR / "weights" / "RealESRGAN_x4plus.pth"
     DENOISE_STRENGTH = float(os.getenv("DENOISE_STRENGTH", "0.5"))
 
     DEFAULT_ROI_SIZE = int(os.getenv("DEFAULT_ROI_SIZE", "256"))
     MAX_WORKERS = int(os.getenv("MAX_WORKERS", "1"))
-    ALLOWED_ORIGINS: list[str] = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    ALLOWED_ORIGINS: list[str] = [
+        o.strip() for o in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(",") if o.strip()
+    ]
 
 
 settings = Settings()
