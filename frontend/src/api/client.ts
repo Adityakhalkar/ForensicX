@@ -1,169 +1,185 @@
-export type CaseItem = {
-  id: number;
-  title: string;
-  description?: string | null;
-  created_at: string;
-  images: ImageItem[];
-};
+import type {
+  ApiError,
+  Case,
+  CreateCaseRequest,
+  CreateExperimentRequest,
+  CreateRunRequest,
+  Experiment,
+  Export,
+  GenerateReportRequest,
+  ImageAsset,
+  Run,
+  RunResults,
+  TokenResponse,
+} from "./types";
 
-export type ImageItem = {
-  id: number;
-  case_id: number;
-  original_path: string;
-  metadata_json: Record<string, unknown>;
-  created_at: string;
-};
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000/api";
 
-export type RunItem = {
-  id: number;
-  case_id: number;
-  status: string;
-  progress: number;
-  config_json: Record<string, unknown>;
-  error_message?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-  created_at: string;
-};
+const REQUEST_TIMEOUT_MS = 10_000;
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000/api";
+// --- Auth error callback (set by AuthContext) ---
 
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    return {};
+let onAuthError: (() => void) | null = null;
+
+export function setAuthErrorHandler(handler: () => void) {
+  onAuthError = handler;
+}
+
+// --- Token access (set by AuthContext) ---
+
+let getToken: (() => string | null) | null = null;
+
+export function setTokenGetter(getter: () => string | null) {
+  getToken = getter;
+}
+
+// --- Error normalization ---
+
+function isApiError(value: unknown): value is ApiError {
+  return typeof value === "object" && value !== null && "message" in value;
+}
+
+async function parseError(response: Response): Promise<ApiError> {
+  const status = response.status;
+  try {
+    const body = await response.json();
+    // FastAPI validation errors
+    if (Array.isArray(body.detail)) {
+      const fieldErrors: Record<string, string[]> = {};
+      let message = "Validation error";
+      for (const err of body.detail) {
+        const field = Array.isArray(err.loc) ? err.loc[err.loc.length - 1] : "unknown";
+        const msg =
+          err.type === "string_too_short"
+            ? `Must be at least ${err.ctx?.min_length ?? "?"} characters`
+            : (err.msg ?? "Invalid");
+        fieldErrors[field] = fieldErrors[field] ?? [];
+        fieldErrors[field].push(msg);
+        message = msg;
+      }
+      return { status, message, fieldErrors };
+    }
+    // FastAPI string detail
+    if (typeof body.detail === "string") {
+      return { status, message: body.detail };
+    }
+    return { status, message: body.message ?? response.statusText };
+  } catch {
+    return { status, message: response.statusText || "Request failed" };
   }
-  return { Authorization: `Bearer ${token}` };
 }
 
-function authTokenQueryPart(): string {
-  const token = localStorage.getItem("token");
-  return token ? `token=${encodeURIComponent(token)}` : "";
+// --- Core request method ---
+
+type RequestOptions = {
+  body?: unknown;
+  formData?: FormData;
+  timeout?: number;
+};
+
+async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), opts.timeout ?? REQUEST_TIMEOUT_MS);
+
+  const headers: Record<string, string> = {};
+  const token = getToken?.();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: opts.formData ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await parseError(response);
+      if (error.status === 401 && onAuthError) onAuthError();
+      throw error;
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
+  } catch (err) {
+    if (isApiError(err)) throw err;
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw { status: 0, message: "Request timed out" } satisfies ApiError;
+    }
+    throw { status: 0, message: String(err) } satisfies ApiError;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
-export async function register(email: string, password: string) {
-  const response = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
+async function requestBlob(path: string): Promise<string> {
+  const headers: Record<string, string> = {};
+  const token = getToken?.();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}${path}`, { headers });
+  if (!response.ok) {
+    const error = await parseError(response);
+    if (error.status === 401 && onAuthError) onAuthError();
+    throw error;
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
 
-export async function login(email: string, password: string) {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Auth ---
 
-export async function logout() {
-  const response = await fetch(`${API_BASE}/auth/logout`, {
-    method: "POST",
-    headers: authHeaders()
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+export const authApi = {
+  register: (email: string, password: string) =>
+    request<TokenResponse>("POST", "/auth/register", { body: { email, password } }),
+  login: (email: string, password: string) =>
+    request<TokenResponse>("POST", "/auth/login", { body: { email, password } }),
+  logout: () => request<void>("POST", "/auth/logout"),
+};
 
-export async function listCases(): Promise<CaseItem[]> {
-  const response = await fetch(`${API_BASE}/cases`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Cases ---
 
-export async function createCase(title: string, description?: string) {
-  const response = await fetch(`${API_BASE}/cases`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ title, description })
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+export const casesApi = {
+  list: () => request<Case[]>("GET", "/cases"),
+  get: (id: number) => request<Case>("GET", `/cases/${id}`),
+  create: (data: CreateCaseRequest) => request<Case>("POST", "/cases", { body: data }),
+  uploadImage: (caseId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<ImageAsset>("POST", `/cases/${caseId}/images`, { formData });
+  },
+};
 
-export async function getCase(caseId: number): Promise<CaseItem> {
-  const response = await fetch(`${API_BASE}/cases/${caseId}`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Runs ---
 
-export async function uploadCaseImage(caseId: number, file: File): Promise<ImageItem> {
-  const data = new FormData();
-  data.append("file", file);
-  const response = await fetch(`${API_BASE}/cases/${caseId}/images`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: data
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+export const runsApi = {
+  create: (data: CreateRunRequest) => request<Run>("POST", "/runs", { body: data }),
+  getStatus: (id: number) => request<Run>("GET", `/runs/${id}`),
+  getResults: (id: number) => request<RunResults>("GET", `/runs/${id}/results`),
+};
 
-export async function createRun(payload: Record<string, unknown>): Promise<RunItem> {
-  const response = await fetch(`${API_BASE}/runs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Experiments ---
 
-export async function getRunStatus(runId: number): Promise<RunItem> {
-  const response = await fetch(`${API_BASE}/runs/${runId}`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+export const experimentsApi = {
+  create: (data: CreateExperimentRequest) =>
+    request<Experiment>("POST", "/experiments/batch", { body: data }),
+  getSummary: (id: number) => request<Experiment>("GET", `/experiments/${id}/summary`),
+  getCsvBlob: (id: number) => requestBlob(`/experiments/${id}/csv`),
+};
 
-export async function getRunResults(runId: number) {
-  const response = await fetch(`${API_BASE}/runs/${runId}/results`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Reports ---
 
-export async function createBatchExperiment(payload: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE}/experiments/batch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+export const reportsApi = {
+  generate: (data: GenerateReportRequest) =>
+    request<Export>("POST", "/reports/generate", { body: data }),
+  getBlob: (id: number) => requestBlob(`/reports/${id}`),
+};
 
-export async function getExperimentSummary(experimentId: number) {
-  const response = await fetch(`${API_BASE}/experiments/${experimentId}/summary`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+// --- Files ---
 
-export function getExperimentCsvUrl(experimentId: number) {
-  const tokenPart = authTokenQueryPart();
-  return `${API_BASE}/experiments/${experimentId}/csv${tokenPart ? `?${tokenPart}` : ""}`;
-}
-
-export async function generateReport(payload: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE}/reports/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
-
-export function getReportUrl(exportId: number) {
-  const tokenPart = authTokenQueryPart();
-  return `${API_BASE}/reports/${exportId}${tokenPart ? `?${tokenPart}` : ""}`;
-}
-
-export function getArtifactUrl(path: string) {
-  const pathPart = `path=${encodeURIComponent(path)}`;
-  const tokenPart = authTokenQueryPart();
-  return `${API_BASE}/files?${pathPart}${tokenPart ? `&${tokenPart}` : ""}`;
-}
+export const filesApi = {
+  getArtifactUrl: (path: string) =>
+    requestBlob(`/files?path=${encodeURIComponent(path)}`),
+};
