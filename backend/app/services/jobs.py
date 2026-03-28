@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,26 @@ from app.services.model_registry import resolve_device
 from app.storage import comparison_dir, run_dir
 
 
+# In-memory progress store: {run_id: {"progress": int, "status": str, "message": str}}
+_run_progress: dict[int, dict[str, Any]] = {}
+_progress_lock = threading.Lock()
+
+
+def update_run_progress(run_id: int, progress: int, status: str, message: str = "") -> None:
+    with _progress_lock:
+        _run_progress[run_id] = {"progress": progress, "status": status, "message": message}
+
+
+def get_run_progress(run_id: int) -> dict[str, Any] | None:
+    with _progress_lock:
+        return _run_progress.get(run_id, None)
+
+
+def clear_run_progress(run_id: int) -> None:
+    with _progress_lock:
+        _run_progress.pop(run_id, None)
+
+
 class JobManager:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKERS)
@@ -42,6 +63,7 @@ class JobManager:
             run.started_at = datetime.now(timezone.utc)
             run.progress = 5
             db.commit()
+            update_run_progress(run_id, 5, "running", "Loading image")
 
             cfg: dict[str, Any] = run.config_json or {}
             image = db.query(ImageAsset).filter(ImageAsset.id == cfg.get("image_id")).first()
@@ -66,6 +88,7 @@ class JobManager:
             )
             run.progress = 60
             db.commit()
+            update_run_progress(run_id, 60, "running", "Models complete, computing metrics")
 
             reference_img = None
             reference_id = cfg.get("reference_image_id")
@@ -112,11 +135,13 @@ class JobManager:
                 )
                 run.progress = 60 + int(35 * idx / max(len(results), 1))
                 db.commit()
+                update_run_progress(run_id, run.progress, "running", f"Metrics for {item.model_name}")
 
             run.status = "completed"
             run.progress = 100
             run.completed_at = datetime.now(timezone.utc)
             db.commit()
+            update_run_progress(run_id, 100, "completed", "Done")
         except Exception as exc:
             run = db.query(Run).filter(Run.id == run_id).first()
             if run:
@@ -124,6 +149,7 @@ class JobManager:
                 run.error_message = str(exc)
                 run.completed_at = datetime.now(timezone.utc)
                 db.commit()
+                update_run_progress(run_id, 0, "failed", str(exc))
         finally:
             db.close()
 

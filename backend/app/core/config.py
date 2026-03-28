@@ -30,6 +30,7 @@ class Settings:
 
     DEFAULT_ROI_SIZE = int(os.getenv("DEFAULT_ROI_SIZE", "256"))
     MAX_WORKERS = int(os.getenv("MAX_WORKERS", "1"))
+    ALLOWED_ORIGINS: list[str] = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 
 
 settings = Settings()

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_current_user_from_header_or_query, get_db
+from app.api.deps import get_current_user, get_db
 from app.models.case import Case
 from app.models.export import Export
 from app.models.experiment import Experiment
@@ -49,7 +49,7 @@ def generate_report(
 @router.get("/{export_id}")
 def get_report(
     export_id: int,
-    _: User = Depends(get_current_user_from_header_or_query),
+    _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     export = db.query(Export).filter(Export.id == export_id).first()
