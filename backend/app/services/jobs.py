@@ -85,6 +85,8 @@ class JobManager:
                 models=model_list,
                 scale=int(cfg.get("scale", 4)),
                 roi=roi_obj,
+                preprocess=str(cfg.get("preprocess", "auto")),
+                denoise_strength=int(cfg.get("denoise_strength", 10)),
             )
             run.progress = 60
             db.commit()

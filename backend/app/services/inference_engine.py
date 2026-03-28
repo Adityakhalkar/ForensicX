@@ -10,6 +10,7 @@ import torch
 import torchvision.transforms as T
 
 from app.core.config import settings
+from app.services.deblur import preprocess_image
 from app.services.model_registry import get_realesrgan, get_srgan
 
 
@@ -99,11 +100,21 @@ def run_models(
     models: Iterable[str],
     scale: int,
     roi: ROI | None,
+    preprocess: str = "auto",
+    denoise_strength: int = 10,
 ) -> list[ModelResult]:
     output_dir.mkdir(parents=True, exist_ok=True)
     compare_dir.mkdir(parents=True, exist_ok=True)
 
     image = Image.open(image_path).convert("RGB")
+
+    # Preprocess for blur reduction
+    image, preprocess_meta = preprocess_image(image, mode=preprocess, denoise_strength=denoise_strength)
+    # Save preprocessed image for reference
+    if preprocess_meta.get("applied"):
+        preprocessed_path = output_dir / "preprocessed_input.png"
+        image.save(preprocessed_path)
+
     bicubic = _bicubic_infer(image, scale)
     bicubic_path = output_dir / "bicubic_output.png"
     bicubic.save(bicubic_path)

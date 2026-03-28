@@ -24,6 +24,8 @@ export function RunComparisonPage() {
   const [referenceImageId, setReferenceImageId] = useState("");
   const [faceReferenceImageId, setFaceReferenceImageId] = useState("");
   const [referenceText, setReferenceText] = useState("");
+  const [preprocess, setPreprocess] = useState("auto");
+  const [denoiseStrength, setDenoiseStrength] = useState(10);
   const [referenceUploadFile, setReferenceUploadFile] = useState<File | null>(null);
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const [info, setInfo] = useState("");
@@ -68,6 +70,8 @@ export function RunComparisonPage() {
         reference_image_id: referenceImageId ? Number(referenceImageId) : null,
         face_reference_image_id: faceReferenceImageId ? Number(faceReferenceImageId) : null,
         reference_text: referenceText || null,
+        preprocess,
+        denoise_strength: denoiseStrength,
       });
     } catch {
       // error available via createRun.error
@@ -104,6 +108,20 @@ export function RunComparisonPage() {
         <label className="check-row">
           <input type="checkbox" checked={includeBicubic} onChange={(e) => setIncludeBicubic(e.target.checked)} /> Bicubic
         </label>
+        <label>Image Preprocessing</label>
+        <select value={preprocess} onChange={(e) => setPreprocess(e.target.value)}>
+          <option value="auto">Auto (detect blur and preprocess if needed)</option>
+          <option value="deblur">Always deblur</option>
+          <option value="none">None (skip preprocessing)</option>
+        </select>
+        <small className="hint">Preprocessing sharpens blurry images before enhancement. Auto mode detects blur level automatically.</small>
+        {preprocess !== "none" ? (
+          <>
+            <label>Denoise Strength: {denoiseStrength}</label>
+            <input type="range" min={0} max={30} value={denoiseStrength} onChange={(e) => setDenoiseStrength(Number(e.target.value))} />
+            <small className="hint">Higher values remove more noise but may smooth details. Default: 10.</small>
+          </>
+        ) : null}
         <label>Reference Text (optional)</label>
         <input value={referenceText} onChange={(e) => setReferenceText(e.target.value)} />
         <label>Quality Reference Image (optional, enables PSNR/LPIPS/SSIM)</label>

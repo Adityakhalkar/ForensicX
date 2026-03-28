@@ -20,6 +20,8 @@ class RunCreate(BaseModel):
     reference_image_id: int | None = None
     reference_text: str | None = None
     face_reference_image_id: int | None = None
+    preprocess: str = Field(default="auto", pattern="^(auto|deblur|none)$")
+    denoise_strength: int = Field(default=10, ge=0, le=30)
 
 
 class RunStatusOut(BaseModel):
