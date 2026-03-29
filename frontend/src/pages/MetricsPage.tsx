@@ -12,14 +12,18 @@ function fmtMetric(value: number | null | undefined, digits = 4): string {
 
 function ArtifactImage({ path, alt }: { path: string; alt: string }) {
   const [src, setSrc] = useState<string>("");
+  const [error, setError] = useState(false);
   useEffect(() => {
-    let revoke: string | null = null;
+    let cancelled = false;
+    let blobUrl: string | null = null;
     filesApi.getArtifactUrl(path).then((url) => {
-      revoke = url;
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      blobUrl = url;
       setSrc(url);
-    }).catch(() => {});
-    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+    }).catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, [path]);
+  if (error) return <div className="hint">Failed to load image</div>;
   if (!src) return <div className="hint">Loading image...</div>;
   return <img src={src} alt={alt} />;
 }
@@ -30,11 +34,21 @@ function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; a
   const [afterSrc, setAfterSrc] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     let revokeBefore: string | null = null;
     let revokeAfter: string | null = null;
-    filesApi.getArtifactUrl(beforePath).then((url) => { revokeBefore = url; setBeforeSrc(url); }).catch(() => {});
-    filesApi.getArtifactUrl(afterPath).then((url) => { revokeAfter = url; setAfterSrc(url); }).catch(() => {});
+    filesApi.getArtifactUrl(beforePath).then((url) => {
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      revokeBefore = url;
+      setBeforeSrc(url);
+    }).catch(() => {});
+    filesApi.getArtifactUrl(afterPath).then((url) => {
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      revokeAfter = url;
+      setAfterSrc(url);
+    }).catch(() => {});
     return () => {
+      cancelled = true;
       if (revokeBefore) URL.revokeObjectURL(revokeBefore);
       if (revokeAfter) URL.revokeObjectURL(revokeAfter);
     };
@@ -74,6 +88,11 @@ function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; a
 export function MetricsPage() {
   const { runId } = useParams();
   const id = Number(runId);
+
+  if (!runId || isNaN(id) || id <= 0) {
+    return <section className="card panel"><h2>Invalid run ID</h2></section>;
+  }
+
   const { data: status } = useRunStatus(id);
   const isComplete = status?.status === "completed";
   const isFailed = status?.status === "failed";

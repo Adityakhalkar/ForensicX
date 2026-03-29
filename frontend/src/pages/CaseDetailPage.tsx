@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCase, useUploadImage } from "../hooks/useCases";
+import { getErrorMessage } from "../api/client";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
@@ -40,8 +41,8 @@ export function CaseDetailPage() {
         <p className="case-title">{data?.title}</p>
         <p className="muted">{data?.description}</p>
         <form onSubmit={handleUpload} className="form-grid">
-          <label>Upload Image</label>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <label htmlFor="upload-image">Upload Image</label>
+          <input id="upload-image" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button type="submit" disabled={!file || upload.isPending}>
             {upload.isPending ? "Uploading..." : "Upload"}
           </button>
@@ -60,8 +61,8 @@ export function CaseDetailPage() {
         {data && data.images.length === 0 ? <small className="hint">No images uploaded in this case yet.</small> : null}
         {info ? <div className="success-inline">{info}</div> : null}
         {fileError ? <pre className="error">{fileError}</pre> : null}
-        {upload.error ? <pre className="error">{(upload.error as any).message ?? String(upload.error)}</pre> : null}
-        {fetchError ? <pre className="error">{(fetchError as any).message ?? String(fetchError)}</pre> : null}
+        {upload.error ? <pre className="error">{getErrorMessage(upload.error)}</pre> : null}
+        {fetchError ? <pre className="error">{getErrorMessage(fetchError)}</pre> : null}
       </section>
     </div>
   );

@@ -41,10 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  // Wire up the API client's token getter
+  // Wire up the API client's token getter — reads from localStorage
+  // so it always has the latest token, even before React re-renders
   useEffect(() => {
-    setTokenGetter(() => token);
-  }, [token]);
+    setTokenGetter(() => localStorage.getItem("token"));
+  }, []);
 
   const clearSession = useCallback(() => {
     setToken(null);

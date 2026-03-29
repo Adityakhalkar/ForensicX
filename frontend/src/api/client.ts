@@ -40,6 +40,12 @@ function isApiError(value: unknown): value is ApiError {
   return typeof value === "object" && value !== null && "status" in value && "message" in value;
 }
 
+export function getErrorMessage(err: unknown): string {
+  if (isApiError(err)) return err.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 async function parseError(response: Response): Promise<ApiError> {
   const status = response.status;
   try {
@@ -115,18 +121,31 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
 }
 
 async function requestBlob(path: string): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
   const headers: Record<string, string> = {};
   const token = getToken?.();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE}${path}`, { headers });
-  if (!response.ok) {
-    const error = await parseError(response);
-    if (error.status === 401 && onAuthError) onAuthError();
-    throw error;
+  try {
+    const response = await fetch(`${API_BASE}${path}`, { headers, signal: controller.signal });
+    if (!response.ok) {
+      const error = await parseError(response);
+      if (error.status === 401 && onAuthError) onAuthError();
+      throw error;
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    if (isApiError(err)) throw err;
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw { status: 0, message: "Download timed out" } satisfies ApiError;
+    }
+    throw { status: 0, message: String(err) } satisfies ApiError;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
 }
 
 // --- Auth ---

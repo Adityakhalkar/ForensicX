@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useCreateExperiment, useExperimentSummary, useGenerateReport, useDownloadCsvBlob, useDownloadReportBlob } from "../hooks/useExperiments";
+import { getErrorMessage } from "../api/client";
 
 export function ResearchExportPage() {
   const [datasetPath, setDatasetPath] = useState("");
@@ -29,9 +30,7 @@ export function ResearchExportPage() {
         limit: 100,
       });
       setExperimentId(exp.id);
-    } catch {
-      // error via createExperiment.error
-    }
+    } catch { /* mutation error rendered via hook */ }
   }
 
   async function handleDownloadCsv() {
@@ -44,7 +43,7 @@ export function ResearchExportPage() {
       a.click();
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
-      setError((e as any).message ?? String(e));
+      setError(getErrorMessage(e));
     }
   }
 
@@ -56,9 +55,7 @@ export function ResearchExportPage() {
         title: "Forensic Enhancement Research Summary",
       });
       setReportId(rep.id);
-    } catch {
-      // error via generateReport.error
-    }
+    } catch { /* mutation error rendered via hook */ }
   }
 
   async function handleDownloadReport() {
@@ -71,7 +68,7 @@ export function ResearchExportPage() {
       a.click();
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
-      setError((e as any).message ?? String(e));
+      setError(getErrorMessage(e));
     }
   }
 
@@ -134,8 +131,8 @@ export function ResearchExportPage() {
       ) : null}
 
       {error ? <pre className="error">{error}</pre> : null}
-      {createExperiment.error ? <pre className="error">{(createExperiment.error as any).message}</pre> : null}
-      {generateReport.error ? <pre className="error">{(generateReport.error as any).message}</pre> : null}
+      {createExperiment.error ? <pre className="error">{getErrorMessage(createExperiment.error)}</pre> : null}
+      {generateReport.error ? <pre className="error">{getErrorMessage(generateReport.error)}</pre> : null}
     </section>
   );
 }

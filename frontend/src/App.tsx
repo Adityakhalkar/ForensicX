@@ -1,5 +1,6 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CaseDetailPage } from "./pages/CaseDetailPage";
@@ -52,7 +53,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
     </AuthProvider>
   );
 }

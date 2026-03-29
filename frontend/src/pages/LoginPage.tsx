@@ -45,10 +45,10 @@ export function LoginPage() {
       <h2>{isRegister ? "Create Account" : "Login"}</h2>
       <p className="hint">Secure access to your forensic enhancement workspace.</p>
       <form onSubmit={handleSubmit} className="form-grid auth-form">
-        <label>Email</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <label>Password</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <label htmlFor="email">Email</label>
+        <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <label htmlFor="password">Password</label>
+        <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {isRegister ? <small className="hint">Use at least 8 characters for password.</small> : null}
         <button type="submit" disabled={loading}>
           {loading ? "Please wait..." : isRegister ? "Register" : "Login"}

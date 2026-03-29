@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCases, useCreateCase } from "../hooks/useCases";
+import { getErrorMessage } from "../api/client";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -16,9 +17,7 @@ export function DashboardPage() {
       setTitle("");
       setDescription("");
       navigate(`/cases/${created.id}`);
-    } catch {
-      // error is available via createCase.error
-    }
+    } catch { /* mutation error rendered via hook */ }
   }
 
   return (
@@ -27,15 +26,15 @@ export function DashboardPage() {
         <h2>Create Case</h2>
         <p className="hint">Group related evidence images into organized investigation cases.</p>
         <form onSubmit={handleCreate} className="form-grid">
-          <label>Title</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-          <label>Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label htmlFor="case-title">Title</label>
+          <input id="case-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <label htmlFor="case-desc">Description</label>
+          <textarea id="case-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
           <button type="submit" disabled={createCase.isPending}>
             {createCase.isPending ? "Creating..." : "Create"}
           </button>
         </form>
-        {createCase.error ? <pre className="error">{(createCase.error as any).message ?? String(createCase.error)}</pre> : null}
+        {createCase.error ? <pre className="error">{getErrorMessage(createCase.error)}</pre> : null}
       </section>
 
       <section className="card panel">
@@ -50,7 +49,7 @@ export function DashboardPage() {
           ))}
         </ul>
         {cases && cases.length === 0 ? <small className="hint">No cases yet. Create your first case to begin.</small> : null}
-        {fetchError ? <pre className="error">{(fetchError as any).message ?? String(fetchError)}</pre> : null}
+        {fetchError ? <pre className="error">{getErrorMessage(fetchError)}</pre> : null}
       </section>
     </div>
   );

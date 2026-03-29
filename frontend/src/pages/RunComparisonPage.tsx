@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useCase, useUploadImage } from "../hooks/useCases";
 import { useCreateRun } from "../hooks/useRuns";
+import { getErrorMessage } from "../api/client";
 
 function useQueryParams() {
   const { search } = useLocation();
@@ -77,9 +78,7 @@ export function RunComparisonPage() {
         preprocess,
         denoise_strength: denoiseStrength,
       });
-    } catch {
-      // error available via createRun.error
-    }
+    } catch { /* mutation error rendered via hook */ }
   }
 
   async function handleReferenceUpload(event: FormEvent) {
@@ -93,9 +92,7 @@ export function RunComparisonPage() {
       setReferenceUploadFile(null);
       setUploadInputKey((v) => v + 1);
       setInfo("Reference image uploaded and selected for quality metrics.");
-    } catch {
-      // error available via uploadRef.error
-    }
+    } catch { /* mutation error rendered via hook */ }
   }
 
   return (
@@ -169,8 +166,8 @@ export function RunComparisonPage() {
       ) : null}
       {info ? <div className="success-inline">{info}</div> : null}
       {error ? <pre className="error">{error}</pre> : null}
-      {createRun.error ? <pre className="error">{(createRun.error as any).message ?? String(createRun.error)}</pre> : null}
-      {uploadRef.error ? <pre className="error">{(uploadRef.error as any).message ?? String(uploadRef.error)}</pre> : null}
+      {createRun.error ? <pre className="error">{getErrorMessage(createRun.error)}</pre> : null}
+      {uploadRef.error ? <pre className="error">{getErrorMessage(uploadRef.error)}</pre> : null}
     </section>
   );
 }
