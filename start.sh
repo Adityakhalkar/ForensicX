@@ -60,6 +60,31 @@ log "Installing backend dependencies..."
 pip install --quiet --upgrade pip
 pip install --quiet -r "$BACKEND_DIR/requirements.txt"
 
+# --- Download model weights if missing ---
+
+WEIGHTS_DIR="$BACKEND_DIR/weights"
+mkdir -p "$WEIGHTS_DIR"
+
+download_weight() {
+    local name="$1" url="$2"
+    if [ ! -f "$WEIGHTS_DIR/$name" ]; then
+        log "Downloading $name..."
+        curl -L -o "$WEIGHTS_DIR/$name" "$url"
+        log "$name downloaded."
+    fi
+}
+
+download_weight "srgan_generator.pth" \
+    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/srgan_generator.pth"
+download_weight "realesr-general-x4v3.pth" \
+    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/realesr-general-x4v3.pth"
+download_weight "realesr-general-wdn-x4v3.pth" \
+    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/realesr-general-wdn-x4v3.pth"
+download_weight "RealESRGAN_x4plus.pth" \
+    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
+download_weight "BSRGAN.pth" \
+    "https://huggingface.co/kadirnar/bsrgan/resolve/main/BSRGAN.pth"
+
 # --- Frontend setup ---
 
 log "Setting up frontend..."
