@@ -108,6 +108,10 @@ def run_models(
 
     image = Image.open(image_path).convert("RGB")
 
+    MAX_DIMENSION = 4096
+    if image.width > MAX_DIMENSION or image.height > MAX_DIMENSION:
+        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+
     # Preprocess for blur reduction
     image, preprocess_meta = preprocess_image(image, mode=preprocess, denoise_strength=denoise_strength)
     # Save preprocessed image for reference

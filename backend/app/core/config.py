@@ -42,3 +42,10 @@ class Settings:
 
 settings = Settings()
 
+if settings.JWT_SECRET == "change-this-in-production":
+    import warnings
+    warnings.warn(
+        "JWT_SECRET is using the default value. Set JWT_SECRET environment variable for production.",
+        stacklevel=1,
+    )
+

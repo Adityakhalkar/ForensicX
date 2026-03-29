@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json as json_mod
 import math
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -96,6 +97,8 @@ async def stream_run_progress(
 
     async def event_generator():
         last_progress = -1
+        start_time = time.time()
+        max_wait = 600  # 10 minutes
         while True:
             progress_data = get_run_progress(run_id)
             if progress_data and progress_data["progress"] != last_progress:
@@ -109,6 +112,9 @@ async def stream_run_progress(
                 if db_run and db_run.status in ("completed", "failed"):
                     yield f"data: {json_mod.dumps({'progress': db_run.progress, 'status': db_run.status, 'message': db_run.error_message or 'Done'})}\n\n"
                     break
+            if time.time() - start_time > max_wait:
+                yield f"data: {json_mod.dumps({'progress': 0, 'status': 'timeout', 'message': 'Stream timed out'})}\n\n"
+                break
             await asyncio.sleep(0.5)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

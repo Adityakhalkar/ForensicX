@@ -25,7 +25,7 @@ def get_file(
         candidate = candidate.resolve()
 
     allowed_root = settings.DATA_DIR.resolve()
-    if not str(candidate).startswith(str(allowed_root)):
+    if not candidate.is_relative_to(allowed_root):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Path is outside allowed scope.")
     if not candidate.exists() or not candidate.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")

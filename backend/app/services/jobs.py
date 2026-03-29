@@ -20,6 +20,7 @@ from app.services.experiment_service import run_batch_benchmark
 from app.services.inference_engine import run_models
 from app.services.metrics import compute_quality_metrics
 from app.services.model_registry import resolve_device
+from app.core.logging import logger
 from app.storage import comparison_dir, run_dir
 
 
@@ -60,6 +61,7 @@ class JobManager:
             if not run:
                 return
             run.status = "running"
+            logger.info("Run %d started", run_id)
             run.started_at = datetime.now(timezone.utc)
             run.progress = 5
             db.commit()
@@ -140,18 +142,20 @@ class JobManager:
                 update_run_progress(run_id, run.progress, "running", f"Metrics for {item.model_name}")
 
             run.status = "completed"
+            logger.info("Run %d completed", run_id)
             run.progress = 100
             run.completed_at = datetime.now(timezone.utc)
             db.commit()
             update_run_progress(run_id, 100, "completed", "Done")
         except Exception as exc:
+            logger.exception("Run %d failed", run_id)
             run = db.query(Run).filter(Run.id == run_id).first()
             if run:
                 run.status = "failed"
-                run.error_message = str(exc)
+                run.error_message = "Enhancement failed. Check server logs for details."
                 run.completed_at = datetime.now(timezone.utc)
                 db.commit()
-                update_run_progress(run_id, run.progress if run else 0, "failed", str(exc))
+                update_run_progress(run_id, run.progress if run else 0, "failed", "Enhancement failed. Check server logs for details.")
         finally:
             db.close()
 
@@ -184,7 +188,7 @@ class JobManager:
             exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
             if exp:
                 exp.status = "failed"
-                exp.error_message = str(exc)
+                exp.error_message = "Enhancement failed. Check server logs for details."
                 exp.completed_at = datetime.now(timezone.utc)
                 db.commit()
         finally:
