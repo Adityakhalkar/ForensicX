@@ -27,6 +27,7 @@ class Settings:
     REALESRGAN_X4_WEIGHTS = ROOT_DIR / "weights" / "realesr-general-x4v3.pth"
     REALESRGAN_WDN_X4_WEIGHTS = ROOT_DIR / "weights" / "realesr-general-wdn-x4v3.pth"
     REALESRGAN_X4PLUS_WEIGHTS = ROOT_DIR / "weights" / "RealESRGAN_x4plus.pth"
+    BSRGAN_WEIGHTS = ROOT_DIR / "weights" / "BSRGAN.pth"
     DENOISE_STRENGTH = float(os.getenv("DENOISE_STRENGTH", "0.5"))
 
     DEFAULT_ROI_SIZE = int(os.getenv("DEFAULT_ROI_SIZE", "256"))

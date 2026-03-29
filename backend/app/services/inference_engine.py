@@ -11,7 +11,7 @@ import torchvision.transforms as T
 
 from app.core.config import settings
 from app.services.deblur import preprocess_image
-from app.services.model_registry import get_realesrgan, get_realesrgan_x4plus, get_srgan
+from app.services.model_registry import get_bsrgan, get_realesrgan, get_realesrgan_x4plus, get_srgan
 
 
 DISCLAIMER = (
@@ -129,6 +129,9 @@ def run_models(
     x4plus_model = x4plus_device = None
     if "realesrgan_x4plus" in requested:
         x4plus_model, x4plus_device = get_realesrgan_x4plus()
+    bsrgan_model = bsrgan_device = None
+    if "bsrgan" in requested:
+        bsrgan_model, bsrgan_device = get_bsrgan()
 
     results: list[ModelResult] = []
     for model_name in models:
@@ -147,6 +150,10 @@ def run_models(
             if x4plus_model is None or x4plus_device is None:
                 continue
             out = _realesrgan_infer(image, x4plus_model, x4plus_device)
+        elif key == "bsrgan":
+            if bsrgan_model is None or bsrgan_device is None:
+                continue
+            out = _realesrgan_infer(image, bsrgan_model, bsrgan_device)
         else:
             continue
 
