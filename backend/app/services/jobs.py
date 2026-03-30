@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +20,28 @@ from app.services.experiment_service import run_batch_benchmark
 from app.services.inference_engine import run_models
 from app.services.metrics import compute_quality_metrics
 from app.services.model_registry import resolve_device
+from app.core.logging import logger
 from app.storage import comparison_dir, run_dir
+
+
+# In-memory progress store: {run_id: {"progress": int, "status": str, "message": str}}
+_run_progress: dict[int, dict[str, Any]] = {}
+_progress_lock = threading.Lock()
+
+
+def update_run_progress(run_id: int, progress: int, status: str, message: str = "") -> None:
+    with _progress_lock:
+        _run_progress[run_id] = {"progress": progress, "status": status, "message": message}
+
+
+def get_run_progress(run_id: int) -> dict[str, Any] | None:
+    with _progress_lock:
+        return _run_progress.get(run_id, None)
+
+
+def clear_run_progress(run_id: int) -> None:
+    with _progress_lock:
+        _run_progress.pop(run_id, None)
 
 
 class JobManager:
@@ -39,9 +61,11 @@ class JobManager:
             if not run:
                 return
             run.status = "running"
+            logger.info("Run %d started", run_id)
             run.started_at = datetime.now(timezone.utc)
             run.progress = 5
             db.commit()
+            update_run_progress(run_id, 5, "running", "Loading image")
 
             cfg: dict[str, Any] = run.config_json or {}
             image = db.query(ImageAsset).filter(ImageAsset.id == cfg.get("image_id")).first()
@@ -63,9 +87,12 @@ class JobManager:
                 models=model_list,
                 scale=int(cfg.get("scale", 4)),
                 roi=roi_obj,
+                preprocess=str(cfg.get("preprocess", "auto")),
+                denoise_strength=int(cfg.get("denoise_strength", 10)),
             )
             run.progress = 60
             db.commit()
+            update_run_progress(run_id, 60, "running", "Models complete, computing metrics")
 
             reference_img = None
             reference_id = cfg.get("reference_image_id")
@@ -112,18 +139,23 @@ class JobManager:
                 )
                 run.progress = 60 + int(35 * idx / max(len(results), 1))
                 db.commit()
+                update_run_progress(run_id, run.progress, "running", f"Metrics for {item.model_name}")
 
             run.status = "completed"
+            logger.info("Run %d completed", run_id)
             run.progress = 100
             run.completed_at = datetime.now(timezone.utc)
             db.commit()
+            update_run_progress(run_id, 100, "completed", "Done")
         except Exception as exc:
+            logger.exception("Run %d failed", run_id)
             run = db.query(Run).filter(Run.id == run_id).first()
             if run:
                 run.status = "failed"
-                run.error_message = str(exc)
+                run.error_message = "Enhancement failed. Check server logs for details."
                 run.completed_at = datetime.now(timezone.utc)
                 db.commit()
+                update_run_progress(run_id, run.progress if run else 0, "failed", "Enhancement failed. Check server logs for details.")
         finally:
             db.close()
 
@@ -156,7 +188,7 @@ class JobManager:
             exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
             if exp:
                 exp.status = "failed"
-                exp.error_message = str(exc)
+                exp.error_message = "Enhancement failed. Check server logs for details."
                 exp.completed_at = datetime.now(timezone.utc)
                 db.commit()
         finally:

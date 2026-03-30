@@ -1,49 +1,42 @@
 import { FormEvent, useState } from "react";
-import { login, register } from "../api/client";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import type { ApiError } from "../api/types";
 
-type Props = {
-  onAuthenticated: () => void;
-};
-
-function friendlyAuthError(error: unknown): string {
-  const raw = String(error).replace(/^Error:\s*/, "").trim();
-  try {
-    const parsed = JSON.parse(raw) as {
-      detail?: string | Array<{ msg?: string; type?: string; loc?: unknown; ctx?: { min_length?: number } }>;
-    };
-    if (typeof parsed.detail === "string") {
-      return parsed.detail;
-    }
-    if (Array.isArray(parsed.detail) && parsed.detail.length > 0) {
-      const first = parsed.detail[0];
-      if (first?.type === "string_too_short" && Array.isArray(first.loc) && first.loc.includes("password")) {
-        return `Password must be at least ${first.ctx?.min_length ?? 8} characters.`;
-      }
-      if (first?.msg) {
-        return first.msg;
-      }
-    }
-  } catch {
-    // Fallback to raw text below.
+function formatError(err: unknown): string {
+  if (typeof err === "object" && err !== null && "message" in err) {
+    const apiErr = err as ApiError;
+    if (apiErr.fieldErrors?.password) return apiErr.fieldErrors.password[0];
+    if (apiErr.fieldErrors?.email) return apiErr.fieldErrors.email[0];
+    return apiErr.message;
   }
-  return raw || "Something went wrong. Please try again.";
+  return String(err);
 }
 
-export function LoginPage({ onAuthenticated }: Props) {
+export function LoginPage() {
+  const { login, register } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setLoading(true);
     try {
-      const payload = isRegister ? await register(email, password) : await login(email, password);
-      localStorage.setItem("token", payload.access_token);
-      onAuthenticated();
+      if (isRegister) {
+        await register(email, password);
+      } else {
+        await login(email, password);
+      }
+      navigate("/", { replace: true });
     } catch (e) {
-      setError(friendlyAuthError(e));
+      setError(formatError(e));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -52,12 +45,14 @@ export function LoginPage({ onAuthenticated }: Props) {
       <h2>{isRegister ? "Create Account" : "Login"}</h2>
       <p className="hint">Secure access to your forensic enhancement workspace.</p>
       <form onSubmit={handleSubmit} className="form-grid auth-form">
-        <label>Email</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <label>Password</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <label htmlFor="email">Email</label>
+        <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <label htmlFor="password">Password</label>
+        <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {isRegister ? <small className="hint">Use at least 8 characters for password.</small> : null}
-        <button type="submit">{isRegister ? "Register" : "Login"}</button>
+        <button type="submit" disabled={loading}>
+          {loading ? "Please wait..." : isRegister ? "Register" : "Login"}
+        </button>
       </form>
       <button className="link-btn" onClick={() => setIsRegister((s) => !s)}>
         {isRegister ? "Use existing account" : "Create new account"}

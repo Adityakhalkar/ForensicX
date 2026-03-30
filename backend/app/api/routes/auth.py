@@ -8,6 +8,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
+from app.core.logging import logger
 from app.schemas.auth import LoginRequest, LogoutResponse, RegisterRequest, TokenResponse
 
 
@@ -26,6 +27,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
     db.add(user)
     db.commit()
     db.refresh(user)
+    logger.info("User registered: %s", user.email)
     token = create_access_token(str(user.id), {"email": user.email})
     return TokenResponse(access_token=token)
 
@@ -36,6 +38,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
     token = create_access_token(str(user.id), {"email": user.email})
+    logger.info("User logged in: %s", user.email)
     return TokenResponse(access_token=token)
 
 
@@ -51,5 +54,6 @@ def logout(
         if not db.query(RevokedToken).filter(RevokedToken.jti == jti).first():
             db.add(RevokedToken(jti=jti))
             db.commit()
+    logger.info("User logged out: user_id=%s", payload.get('sub'))
     return LogoutResponse(message="Logged out successfully.")
 

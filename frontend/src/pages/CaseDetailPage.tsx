@@ -1,41 +1,38 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CaseItem, getCase, uploadCaseImage } from "../api/client";
+import { useCase, useUploadImage } from "../hooks/useCases";
+import { getErrorMessage } from "../api/client";
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 export function CaseDetailPage() {
   const { caseId } = useParams();
   const id = Number(caseId);
-  const [data, setData] = useState<CaseItem | null>(null);
+  const { data, isLoading, error: fetchError } = useCase(id);
+  const upload = useUploadImage(id);
   const [file, setFile] = useState<File | null>(null);
   const [info, setInfo] = useState("");
-  const [error, setError] = useState("");
-
-  async function load() {
-    try {
-      setData(await getCase(id));
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, [id]);
+  const [fileError, setFileError] = useState("");
 
   async function handleUpload(event: FormEvent) {
     event.preventDefault();
     if (!file) return;
-    setError("");
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError("File too large. Maximum size is 20MB.");
+      return;
+    }
+    setFileError("");
     setInfo("");
     try {
-      const uploaded = await uploadCaseImage(id, file);
+      const uploaded = await upload.mutateAsync(file);
       setFile(null);
-      await load();
       setInfo(`Uploaded "${String(uploaded.metadata_json.filename ?? uploaded.original_path)}" successfully.`);
-    } catch (e) {
-      setError(String(e));
+    } catch {
+      // error available via upload.error
     }
   }
+
+  if (isLoading) return <p className="hint">Loading case...</p>;
 
   return (
     <div className="grid case-grid">
@@ -44,10 +41,10 @@ export function CaseDetailPage() {
         <p className="case-title">{data?.title}</p>
         <p className="muted">{data?.description}</p>
         <form onSubmit={handleUpload} className="form-grid">
-          <label>Upload Image</label>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button type="submit" disabled={!file}>
-            Upload
+          <label htmlFor="upload-image">Upload Image</label>
+          <input id="upload-image" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <button type="submit" disabled={!file || upload.isPending}>
+            {upload.isPending ? "Uploading..." : "Upload"}
           </button>
         </form>
       </section>
@@ -57,15 +54,15 @@ export function CaseDetailPage() {
           {data?.images.map((img) => (
             <li key={img.id}>
               <span className="item-name">{String(img.metadata_json.filename ?? img.original_path)}</span>
-              <Link className="item-link" to={`/cases/${id}/run?imageId=${img.id}`}>
-                Run Comparison
-              </Link>
+              <Link className="item-link" to={`/cases/${id}/run?imageId=${img.id}`}>Run Comparison</Link>
             </li>
           ))}
         </ul>
         {data && data.images.length === 0 ? <small className="hint">No images uploaded in this case yet.</small> : null}
         {info ? <div className="success-inline">{info}</div> : null}
-        {error ? <pre className="error">{error}</pre> : null}
+        {fileError ? <pre className="error">{fileError}</pre> : null}
+        {upload.error ? <pre className="error">{getErrorMessage(upload.error)}</pre> : null}
+        {fetchError ? <pre className="error">{getErrorMessage(fetchError)}</pre> : null}
       </section>
     </div>
   );

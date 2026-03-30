@@ -52,7 +52,10 @@ def upload_case_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
 
     dest = new_upload_path(case_id, file.filename or "uploaded_image.png")
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
     content = file.file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large. Maximum size is 20MB.")
     dest.write_bytes(content)
 
     try:

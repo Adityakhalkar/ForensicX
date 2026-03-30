@@ -10,7 +10,8 @@ import torch
 import torchvision.transforms as T
 
 from app.core.config import settings
-from app.services.model_registry import get_realesrgan, get_srgan
+from app.services.deblur import preprocess_image
+from app.services.model_registry import get_bsrgan, get_realesrgan, get_realesrgan_x4plus, get_srgan
 
 
 DISCLAIMER = (
@@ -99,11 +100,25 @@ def run_models(
     models: Iterable[str],
     scale: int,
     roi: ROI | None,
+    preprocess: str = "auto",
+    denoise_strength: int = 10,
 ) -> list[ModelResult]:
     output_dir.mkdir(parents=True, exist_ok=True)
     compare_dir.mkdir(parents=True, exist_ok=True)
 
     image = Image.open(image_path).convert("RGB")
+
+    MAX_DIMENSION = 4096
+    if image.width > MAX_DIMENSION or image.height > MAX_DIMENSION:
+        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+
+    # Preprocess for blur reduction
+    image, preprocess_meta = preprocess_image(image, mode=preprocess, denoise_strength=denoise_strength)
+    # Save preprocessed image for reference
+    if preprocess_meta.get("applied"):
+        preprocessed_path = output_dir / "preprocessed_input.png"
+        image.save(preprocessed_path)
+
     bicubic = _bicubic_infer(image, scale)
     bicubic_path = output_dir / "bicubic_output.png"
     bicubic.save(bicubic_path)
@@ -115,6 +130,12 @@ def run_models(
         srgan_model, srgan_device = get_srgan()
     if "realesrgan" in requested:
         realesr_model, realesr_device = get_realesrgan()
+    x4plus_model = x4plus_device = None
+    if "realesrgan_x4plus" in requested:
+        x4plus_model, x4plus_device = get_realesrgan_x4plus()
+    bsrgan_model = bsrgan_device = None
+    if "bsrgan" in requested:
+        bsrgan_model, bsrgan_device = get_bsrgan()
 
     results: list[ModelResult] = []
     for model_name in models:
@@ -129,6 +150,14 @@ def run_models(
             if realesr_model is None or realesr_device is None:
                 continue
             out = _realesrgan_infer(image, realesr_model, realesr_device)
+        elif key == "realesrgan_x4plus":
+            if x4plus_model is None or x4plus_device is None:
+                continue
+            out = _realesrgan_infer(image, x4plus_model, x4plus_device)
+        elif key == "bsrgan":
+            if bsrgan_model is None or bsrgan_device is None:
+                continue
+            out = _realesrgan_infer(image, bsrgan_model, bsrgan_device)
         else:
             continue
 

@@ -24,5 +24,8 @@ backend/data_store/
 frontend/node_modules/
 frontend/dist/
 
+# Model weights (downloaded at runtime)
+backend/weights/*.pth
+
 # Logs
 *.log

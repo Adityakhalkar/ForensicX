@@ -20,7 +20,8 @@ def ensure_storage_dirs() -> None:
 def new_upload_path(case_id: int, filename: str) -> Path:
     case_dir = settings.UPLOAD_DIR / f"case_{case_id}"
     case_dir.mkdir(parents=True, exist_ok=True)
-    safe_name = filename.replace(" ", "_")
+    import re
+    safe_name = re.sub(r"[^\w\-.]", "_", Path(filename).name)
     return case_dir / f"{uuid4().hex}_{safe_name}"
 
 

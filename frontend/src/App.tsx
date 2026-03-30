@@ -1,91 +1,61 @@
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { logout } from "./api/client";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CaseDetailPage } from "./pages/CaseDetailPage";
 import { RunComparisonPage } from "./pages/RunComparisonPage";
 import { MetricsPage } from "./pages/MetricsPage";
+import { ResearchExportPage } from "./pages/ResearchExportPage";
 
 function TopNav() {
-  const navigate = useNavigate();
-  const token = localStorage.getItem("token");
+  const { isAuthenticated, logout } = useAuth();
   return (
     <header className="topnav">
       <h1 className="brand-title">Forensic Enhancement Assistant</h1>
-      {token ? (
+      {isAuthenticated ? (
         <nav className="row nav-actions">
-          <Link className="nav-link" to="/">
-            Dashboard
-          </Link>
-          <button
-            className="nav-link"
-            onClick={async () => {
-              try {
-                await logout();
-              } catch {
-                // Ignore logout API failures and clear local session anyway.
-              }
-              localStorage.removeItem("token");
-              navigate("/login");
-            }}
-          >
-            Logout
-          </button>
+          <Link className="nav-link" to="/">Dashboard</Link>
+          <Link className="nav-link" to="/experiments">Experiments</Link>
+          <button className="nav-link" onClick={() => void logout()}>Logout</button>
         </nav>
       ) : null}
     </header>
   );
 }
 
-function Protected({ children }: { children: JSX.Element }) {
-  if (!localStorage.getItem("token")) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
+function Protected({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <div className="loading-spinner">Loading...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 }
 
-export default function App() {
+function AppRoutes() {
   return (
     <>
       <TopNav />
       <main className="container app-shell">
         <Routes>
-          <Route path="/login" element={<LoginPage onAuthenticated={() => (window.location.href = "/")} />} />
-          <Route
-            path="/"
-            element={
-              <Protected>
-                <DashboardPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/cases/:caseId"
-            element={
-              <Protected>
-                <CaseDetailPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/cases/:caseId/run"
-            element={
-              <Protected>
-                <RunComparisonPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/runs/:runId/metrics"
-            element={
-              <Protected>
-                <MetricsPage />
-              </Protected>
-            }
-          />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<Protected><DashboardPage /></Protected>} />
+          <Route path="/cases/:caseId" element={<Protected><CaseDetailPage /></Protected>} />
+          <Route path="/cases/:caseId/run" element={<Protected><RunComparisonPage /></Protected>} />
+          <Route path="/runs/:runId/metrics" element={<Protected><MetricsPage /></Protected>} />
+          <Route path="/experiments" element={<Protected><ResearchExportPage /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
+    </AuthProvider>
   );
 }
