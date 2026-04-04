@@ -11,7 +11,7 @@ import torchvision.transforms as T
 
 from app.core.config import settings
 from app.services.deblur import preprocess_image
-from app.services.model_registry import get_bsrgan, get_realesrgan, get_realesrgan_x4plus, get_srgan
+from app.services.model_registry import model_cache
 
 
 DISCLAIMER = (
@@ -93,6 +93,18 @@ def _roi_compare(base: Image.Image, candidate: Image.Image, roi: ROI | None) -> 
     return canvas
 
 
+def _infer_model(name: str, image: Image.Image) -> Image.Image | None:
+    """Load a model, run inference, and unload it. Returns None for bicubic (handled separately)."""
+    model, device = model_cache.load(name)
+    try:
+        if name == "srgan":
+            return _srgan_infer(image, model, device)
+        else:
+            return _realesrgan_infer(image, model, device)
+    finally:
+        model_cache.unload()
+
+
 def run_models(
     image_path: Path,
     output_dir: Path,
@@ -114,7 +126,6 @@ def run_models(
 
     # Preprocess for blur reduction
     image, preprocess_meta = preprocess_image(image, mode=preprocess, denoise_strength=denoise_strength)
-    # Save preprocessed image for reference
     if preprocess_meta.get("applied"):
         preprocessed_path = output_dir / "preprocessed_input.png"
         image.save(preprocessed_path)
@@ -123,43 +134,16 @@ def run_models(
     bicubic_path = output_dir / "bicubic_output.png"
     bicubic.save(bicubic_path)
 
-    requested = {name.lower() for name in models}
-    srgan_model = srgan_device = None
-    realesr_model = realesr_device = None
-    if "srgan" in requested:
-        srgan_model, srgan_device = get_srgan()
-    if "realesrgan" in requested:
-        realesr_model, realesr_device = get_realesrgan()
-    x4plus_model = x4plus_device = None
-    if "realesrgan_x4plus" in requested:
-        x4plus_model, x4plus_device = get_realesrgan_x4plus()
-    bsrgan_model = bsrgan_device = None
-    if "bsrgan" in requested:
-        bsrgan_model, bsrgan_device = get_bsrgan()
-
     results: list[ModelResult] = []
     for model_name in models:
         key = model_name.lower()
+
         if key == "bicubic":
             out = bicubic
-        elif key == "srgan":
-            if srgan_model is None or srgan_device is None:
-                continue
-            out = _srgan_infer(image, srgan_model, srgan_device)
-        elif key == "realesrgan":
-            if realesr_model is None or realesr_device is None:
-                continue
-            out = _realesrgan_infer(image, realesr_model, realesr_device)
-        elif key == "realesrgan_x4plus":
-            if x4plus_model is None or x4plus_device is None:
-                continue
-            out = _realesrgan_infer(image, x4plus_model, x4plus_device)
-        elif key == "bsrgan":
-            if bsrgan_model is None or bsrgan_device is None:
-                continue
-            out = _realesrgan_infer(image, bsrgan_model, bsrgan_device)
         else:
-            continue
+            out = _infer_model(key, image)
+            if out is None:
+                continue
 
         out_path = output_dir / f"{key}_output.png"
         out.save(out_path)

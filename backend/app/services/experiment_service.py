@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-from app.services.model_registry import get_realesrgan, get_srgan
+from app.services.model_registry import model_cache
 
 
 def _psnr(a: torch.Tensor, b: torch.Tensor) -> float:
@@ -52,9 +52,11 @@ def run_batch_benchmark(
     if not files and mode == "synthetic_x4":
         raise ValueError(f"No images found in {dataset_dir}")
 
-    srgan_model, srgan_device = get_srgan()
-    realesr_model, realesr_device = get_realesrgan()
+    # Load srgan first to determine device, then unload — models loaded per-image below
+    srgan_model, srgan_device = model_cache.load("srgan")
     metric_device = srgan_device
+    model_cache.unload()
+    realesr_device = metric_device
     lpips_net = _lpips_model(metric_device)
 
     model_set = [m.lower() for m in models]
@@ -81,10 +83,6 @@ def run_batch_benchmark(
                         lr=lr,
                         hr=hr,
                         model_set=model_set,
-                        srgan_model=srgan_model,
-                        srgan_device=srgan_device,
-                        realesr_model=realesr_model,
-                        realesr_device=realesr_device,
                         lpips_net=lpips_net,
                         metric_device=metric_device,
                     )
@@ -104,10 +102,6 @@ def run_batch_benchmark(
                         lr=lr,
                         hr=hr,
                         model_set=model_set,
-                        srgan_model=srgan_model,
-                        srgan_device=srgan_device,
-                        realesr_model=realesr_model,
-                        realesr_device=realesr_device,
                         lpips_net=lpips_net,
                         metric_device=metric_device,
                     )
@@ -144,10 +138,6 @@ def _benchmark_one(
     lr: Image.Image,
     hr: Image.Image,
     model_set: list[str],
-    srgan_model,
-    srgan_device,
-    realesr_model,
-    realesr_device,
     lpips_net,
     metric_device,
 ) -> list[dict]:
@@ -161,17 +151,25 @@ def _benchmark_one(
             out_unit = _to_unit(out_img, metric_device)
             out_model = _to_model(out_img, metric_device)
         elif model_name == "srgan":
-            x = _to_model(lr, srgan_device)
-            y = srgan_model(x).squeeze(0).detach().cpu().clamp(-1, 1) * 0.5 + 0.5
-            out_img = T.ToPILImage()(y)
-            out_unit = _to_unit(out_img, metric_device)
-            out_model = _to_model(out_img, metric_device)
+            srgan_model, srgan_device = model_cache.load("srgan")
+            try:
+                x = _to_model(lr, srgan_device)
+                y = srgan_model(x).squeeze(0).detach().cpu().clamp(-1, 1) * 0.5 + 0.5
+                out_img = T.ToPILImage()(y)
+                out_unit = _to_unit(out_img, metric_device)
+                out_model = _to_model(out_img, metric_device)
+            finally:
+                model_cache.unload()
         elif model_name == "realesrgan":
-            x = _to_unit(lr, realesr_device)
-            y = realesr_model(x).squeeze(0).detach().cpu().clamp(0, 1)
-            out_img = T.ToPILImage()(y)
-            out_unit = _to_unit(out_img, metric_device)
-            out_model = _to_model(out_img, metric_device)
+            realesr_model, realesr_device = model_cache.load("realesrgan")
+            try:
+                x = _to_unit(lr, realesr_device)
+                y = realesr_model(x).squeeze(0).detach().cpu().clamp(0, 1)
+                out_img = T.ToPILImage()(y)
+                out_unit = _to_unit(out_img, metric_device)
+                out_model = _to_model(out_img, metric_device)
+            finally:
+                model_cache.unload()
         else:
             continue
 
