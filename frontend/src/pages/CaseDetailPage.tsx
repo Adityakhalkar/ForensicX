@@ -55,6 +55,7 @@ export function CaseDetailPage() {
             <li key={img.id}>
               <span className="item-name">{String(img.metadata_json.filename ?? img.original_path)}</span>
               <Link className="item-link" to={`/cases/${id}/run?imageId=${img.id}`}>Run Comparison</Link>
+              <Link className="item-link" to={`/cases/${id}/analysis?imageId=${img.id}`}>Analyze</Link>
             </li>
           ))}
         </ul>

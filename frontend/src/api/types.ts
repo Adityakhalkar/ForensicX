@@ -143,6 +143,52 @@ export interface Export {
   created_at: string;
 }
 
+// --- Analysis ---
+
+export interface AnalysisRequest {
+  case_id: number;
+  image_id: number;
+}
+
+export interface AnalysisResult {
+  id: number;
+  case_id: number;
+  image_id: number;
+  status: string;
+  results_json: {
+    ela?: {
+      verdict: string;
+      mean_error: number;
+      max_error: number;
+      suspicious_pixel_ratio: number;
+      image_path?: string;
+    };
+    metadata?: {
+      format: string;
+      mode: string;
+      size: { width: number; height: number };
+      exif: Record<string, string>;
+      flags: string[];
+      gps?: Record<string, string>;
+    };
+    copy_move?: {
+      verdict: string;
+      total_keypoints: number;
+      suspicious_matches: number;
+      image_path?: string;
+    };
+    noise?: {
+      verdict: string;
+      mean_noise: number;
+      coefficient_of_variation: number;
+      inconsistent_blocks: number;
+      total_blocks: number;
+      image_path?: string;
+    };
+  } | null;
+  error_message?: string | null;
+}
+
 // --- SSE ---
 
 export interface RunProgressEvent {

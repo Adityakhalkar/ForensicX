@@ -1,4 +1,6 @@
 import type {
+  AnalysisRequest,
+  AnalysisResult,
   ApiError,
   Case,
   CreateCaseRequest,
@@ -194,6 +196,13 @@ export const reportsApi = {
   generate: (data: GenerateReportRequest) =>
     request<Export>("POST", "/reports/generate", { body: data }),
   getBlob: (id: number) => requestBlob(`/reports/${id}`),
+};
+
+// --- Analysis ---
+
+export const analysisApi = {
+  create: (data: AnalysisRequest) => request<AnalysisResult>("POST", "/analysis", { body: data }),
+  get: (id: number) => request<AnalysisResult>("GET", `/analysis/${id}`),
 };
 
 // --- Files ---

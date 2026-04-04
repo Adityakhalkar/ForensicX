@@ -7,6 +7,7 @@ import { CaseDetailPage } from "./pages/CaseDetailPage";
 import { RunComparisonPage } from "./pages/RunComparisonPage";
 import { MetricsPage } from "./pages/MetricsPage";
 import { ResearchExportPage } from "./pages/ResearchExportPage";
+import { AnalysisPage } from "./pages/AnalysisPage";
 
 function TopNav() {
   const { isAuthenticated, logout } = useAuth();
@@ -42,6 +43,7 @@ function AppRoutes() {
           <Route path="/cases/:caseId" element={<Protected><CaseDetailPage /></Protected>} />
           <Route path="/cases/:caseId/run" element={<Protected><RunComparisonPage /></Protected>} />
           <Route path="/runs/:runId/metrics" element={<Protected><MetricsPage /></Protected>} />
+          <Route path="/cases/:caseId/analysis" element={<Protected><AnalysisPage /></Protected>} />
           <Route path="/experiments" element={<Protected><ResearchExportPage /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
