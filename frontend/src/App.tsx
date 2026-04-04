@@ -1,6 +1,8 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Grain } from "./components/Grain";
+import { Scanlines } from "./components/Scanlines";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CaseDetailPage } from "./pages/CaseDetailPage";
@@ -35,6 +37,8 @@ function Protected({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <>
+      <Grain />
+      <Scanlines />
       <TopNav />
       <main className="container app-shell">
         <Routes>
