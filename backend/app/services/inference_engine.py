@@ -95,12 +95,20 @@ def _roi_compare(base: Image.Image, candidate: Image.Image, roi: ROI | None) -> 
 
 def _infer_model(name: str, image: Image.Image) -> Image.Image | None:
     """Load a model, run inference, and unload it. Returns None for bicubic (handled separately)."""
+    # For heavy RRDBNet models, cap input smaller to avoid OOM
+    infer_image = image
+    if name in ("bsrgan", "realesrgan_x4plus"):
+        max_dim = 256  # RRDBNet (23 RRDB blocks) needs much less input to stay in memory
+        if infer_image.width > max_dim or infer_image.height > max_dim:
+            infer_image = infer_image.copy()
+            infer_image.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
     model, device = model_cache.load(name)
     try:
         if name == "srgan":
-            return _srgan_infer(image, model, device)
+            return _srgan_infer(infer_image, model, device)
         else:
-            return _realesrgan_infer(image, model, device)
+            return _realesrgan_infer(infer_image, model, device)
     finally:
         model_cache.unload()
 
