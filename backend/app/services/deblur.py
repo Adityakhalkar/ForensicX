@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import gc
 from dataclasses import dataclass
 
 import cv2
 import numpy as np
 from PIL import Image
+
+from app.core.config import settings
+from app.core.logging import logger
 
 
 @dataclass
@@ -16,13 +20,7 @@ class BlurAnalysis:
 
 
 def detect_blur(image: Image.Image, threshold_low: float = 100.0, threshold_high: float = 300.0) -> BlurAnalysis:
-    """Detect blur level using Laplacian variance.
-
-    Lower variance = more blur. Typical ranges:
-    - Sharp image: >300
-    - Mild blur: 100-300
-    - Heavy blur: <100
-    """
+    """Detect blur level using Laplacian variance."""
     gray = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
     variance = float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
@@ -39,6 +37,34 @@ def detect_blur(image: Image.Image, threshold_low: float = 100.0, threshold_high
     return BlurAnalysis(laplacian_variance=variance, is_blurry=is_blurry, blur_level=level)
 
 
+def _nafnet_deblur(image: Image.Image) -> Image.Image:
+    """Run NAFNet deep learning deblurring. Loads model, processes, unloads."""
+    from nafnetlib import DeblurProcessor
+
+    logger.info("Loading NAFNet deblurring model...")
+    processor = DeblurProcessor(
+        model_id="gopro_width64",
+        model_dir=str(settings.ROOT_DIR / "weights" / "nafnet"),
+        device=str(settings.MODEL_DEVICE if settings.MODEL_DEVICE != "auto" else "cpu"),
+    )
+    logger.info("Running NAFNet deblurring...")
+    result = processor.process(image)
+
+    # Free the model
+    del processor
+    gc.collect()
+
+    return result
+
+
+def _opencv_sharpen(image: Image.Image, sharpen_amount: float = 1.5) -> Image.Image:
+    """Apply unsharp mask sharpening as a lightweight post-process."""
+    img_arr = np.asarray(image, dtype=np.uint8)
+    gaussian = cv2.GaussianBlur(img_arr, (0, 0), sigmaX=2.0)
+    sharpened = cv2.addWeighted(img_arr, 1.0 + sharpen_amount, gaussian, -sharpen_amount, 0)
+    return Image.fromarray(sharpened)
+
+
 def preprocess_image(
     image: Image.Image,
     mode: str = "auto",
@@ -47,14 +73,8 @@ def preprocess_image(
 ) -> tuple[Image.Image, dict]:
     """Preprocess image to reduce blur before super-resolution.
 
-    Args:
-        image: Input PIL image.
-        mode: "auto" (detect and apply if blurry), "deblur" (always apply), "none" (skip).
-        denoise_strength: Strength for non-local means denoising (h parameter). Higher = more smoothing.
-        sharpen_amount: Strength of unsharp mask. 0 = no sharpening, 2.0 = strong.
-
-    Returns:
-        Tuple of (processed image, metadata dict with blur analysis and what was applied).
+    Uses NAFNet (deep learning) for deblurring when mode is "deblur" or "auto" detects blur.
+    Falls back to OpenCV sharpening if NAFNet is unavailable.
     """
     metadata: dict = {"mode": mode, "applied": []}
 
@@ -73,45 +93,30 @@ def preprocess_image(
         metadata["skipped"] = "Image is sharp enough, no preprocessing needed"
         return image, metadata
 
-    img_arr = np.asarray(image, dtype=np.uint8)
+    # Stage 1: NAFNet deep deblurring
+    try:
+        image = _nafnet_deblur(image)
+        metadata["applied"].append("nafnet_deblur(gopro_width64)")
+    except Exception as e:
+        logger.warning("NAFNet deblurring failed, falling back to OpenCV: %s", e)
+        # Fallback: OpenCV NLMeans denoising
+        img_arr = np.asarray(image, dtype=np.uint8)
+        h = max(denoise_strength, 15) if analysis.blur_level == "high" else denoise_strength
+        denoised = cv2.fastNlMeansDenoisingColored(img_arr, None, h, h, 7, 21)
+        image = Image.fromarray(denoised)
+        metadata["applied"].append(f"opencv_nlmeans_fallback(h={h})")
 
-    # Stage 1: Non-local means denoising
-    # Reduces noise and mild blur while preserving edges
-    # h=denoise_strength, hForColor=denoise_strength, templateWindowSize=7, searchWindowSize=21
-    h = denoise_strength
-    if analysis.blur_level == "high":
-        h = max(denoise_strength, 15)  # Stronger denoising for heavily blurred images
-
-    denoised = cv2.fastNlMeansDenoisingColored(img_arr, None, h, h, 7, 21)
-    metadata["applied"].append(f"nlmeans_denoise(h={h})")
-
-    # Stage 2: Unsharp masking for edge enhancement
-    # Gaussian blur → subtract from original → add scaled difference back
+    # Stage 2: Light sharpening post-process
     if sharpen_amount > 0:
-        gaussian = cv2.GaussianBlur(denoised, (0, 0), sigmaX=2.0)
-        sharpened = cv2.addWeighted(denoised, 1.0 + sharpen_amount, gaussian, -sharpen_amount, 0)
+        image = _opencv_sharpen(image, sharpen_amount)
         metadata["applied"].append(f"unsharp_mask(amount={sharpen_amount})")
-    else:
-        sharpened = denoised
 
-    # Stage 3: CLAHE (Contrast Limited Adaptive Histogram Equalization) for contrast
-    # Only for heavily blurred images — improves local contrast
-    if analysis.blur_level == "high":
-        lab = cv2.cvtColor(sharpened, cv2.COLOR_RGB2LAB)
-        l_channel = lab[:, :, 0]
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        lab[:, :, 0] = clahe.apply(l_channel)
-        sharpened = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
-        metadata["applied"].append("clahe(clip=2.0)")
-
-    result = Image.fromarray(sharpened)
-
-    # Post-analysis to show improvement
-    post_analysis = detect_blur(result)
+    # Post-analysis
+    post_analysis = detect_blur(image)
     metadata["post_blur_analysis"] = {
         "laplacian_variance": round(post_analysis.laplacian_variance, 2),
         "blur_level": post_analysis.blur_level,
         "improvement": round(post_analysis.laplacian_variance - analysis.laplacian_variance, 2),
     }
 
-    return result, metadata
+    return image, metadata
