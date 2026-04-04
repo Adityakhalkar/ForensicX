@@ -13,7 +13,7 @@ class AnalysisRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     case_id: Mapped[int] = mapped_column(Integer, ForeignKey("cases.id"), index=True)
-    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("image_assets.id"), index=True)
+    image_id: Mapped[int] = mapped_column(Integer, ForeignKey("images.id"), index=True)
     status: Mapped[str] = mapped_column(String(50), default="queued")
     results_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
