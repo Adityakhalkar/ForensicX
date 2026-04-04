@@ -41,14 +41,26 @@ def _nafnet_deblur(image: Image.Image) -> Image.Image:
     """Run NAFNet deep learning deblurring. Loads model, processes, unloads."""
     from nafnetlib import DeblurProcessor
 
+    # Downscale large images to prevent OOM (NAFNet memory scales with resolution)
+    max_dim = 1024
+    original_size = image.size
+    if image.width > max_dim or image.height > max_dim:
+        image = image.copy()
+        image.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        logger.info("Downscaled image to %dx%d for NAFNet", image.width, image.height)
+
     logger.info("Loading NAFNet deblurring model...")
     processor = DeblurProcessor(
-        model_id="gopro_width64",
+        model_id="gopro_width32",
         model_dir=str(settings.ROOT_DIR / "weights" / "nafnet"),
         device=str(settings.MODEL_DEVICE if settings.MODEL_DEVICE != "auto" else "cpu"),
     )
     logger.info("Running NAFNet deblurring...")
     result = processor.process(image)
+
+    # Upscale back to original size if we downscaled
+    if result.size != original_size:
+        result = result.resize(original_size, Image.Resampling.LANCZOS)
 
     # Free the model
     del processor
