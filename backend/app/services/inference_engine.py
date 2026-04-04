@@ -120,7 +120,7 @@ def run_models(
 
     image = Image.open(image_path).convert("RGB")
 
-    MAX_DIMENSION = 4096
+    MAX_DIMENSION = 512  # Keep small to avoid OOM — output is 4x this (2048px)
     if image.width > MAX_DIMENSION or image.height > MAX_DIMENSION:
         image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
 
