@@ -10,6 +10,10 @@ services:
       - JWT_SECRET=change-this-in-production
       - ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
       - MODEL_DEVICE=cpu
+    deploy:
+      resources:
+        limits:
+          memory: 4g
     restart: unless-stopped
 
   frontend:

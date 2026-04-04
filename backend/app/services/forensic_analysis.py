@@ -270,8 +270,8 @@ def analyze_noise(image: Image.Image, block_size: int = 64) -> tuple[Image.Image
         for c in range(cols):
             y1, y2 = r * block_size, min((r + 1) * block_size, h)
             x1, x2 = c * block_size, min((c + 1) * block_size, w)
-            block = gray[y1:y2, x1:x2]
-            noise_grid[r, c] = float(cv2.Laplacian(block, cv2.CV_64F).var())
+            block = gray[y1:y2, x1:x2].astype(np.uint8)
+            noise_grid[r, c] = float(cv2.Laplacian(block, cv2.CV_32F).var())
 
     # Normalize for visualization
     grid_min = noise_grid.min()
