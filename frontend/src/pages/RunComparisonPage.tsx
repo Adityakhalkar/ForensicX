@@ -22,6 +22,7 @@ export function RunComparisonPage() {
   const [includeSrgan, setIncludeSrgan] = useState(true);
   const [includeRealesr, setIncludeRealesr] = useState(true);
   const [includeBicubic, setIncludeBicubic] = useState(true);
+  const [includeBsrgan, setIncludeBsrgan] = useState(false);
   const [referenceImageId, setReferenceImageId] = useState("");
   const [faceReferenceImageId, setFaceReferenceImageId] = useState("");
   const [referenceText, setReferenceText] = useState("");
@@ -52,6 +53,7 @@ export function RunComparisonPage() {
     if (includeSrgan) models.push("srgan");
     if (includeRealesr) models.push("realesrgan");
     if (includeBicubic) models.push("bicubic");
+    if (includeBsrgan) models.push("bsrgan");
     if (models.length === 0) {
       setError("Select at least one model.");
       return;
@@ -104,6 +106,9 @@ export function RunComparisonPage() {
         </label>
         <label className="check-row">
           <input type="checkbox" checked={includeBicubic} onChange={(e) => setIncludeBicubic(e.target.checked)} /> Bicubic
+        </label>
+        <label className="check-row">
+          <input type="checkbox" checked={includeBsrgan} onChange={(e) => setIncludeBsrgan(e.target.checked)} /> BSRGAN (heavy — needs 16GB+ RAM)
         </label>
         <label>Image Preprocessing</label>
         <select value={preprocess} onChange={(e) => setPreprocess(e.target.value)}>
