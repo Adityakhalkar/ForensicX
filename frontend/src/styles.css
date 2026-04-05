@@ -483,6 +483,43 @@ pre {
   color: var(--text-secondary);
 }
 
+/* ===== METRIC DISPLAY ===== */
+
+.metric-section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.metric-na {
+  color: var(--text-muted);
+}
+
+.metric-hint-box {
+  border: 1px solid var(--border);
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.model-name-cell {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ===== LOADING ===== */
 
 .loading-spinner {

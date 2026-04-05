@@ -4,9 +4,10 @@ import { useRunStatus, useRunResults } from "../hooks/useRuns";
 import { useRunProgress } from "../hooks/useRunProgress";
 import { filesApi } from "../api/client";
 import { DisclaimerBanner } from "../components/DisclaimerBanner";
+import type { RunMetric } from "../api/types";
 
 function fmtMetric(value: number | null | undefined, digits = 4): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "Not computed";
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return value.toFixed(digits);
 }
 
@@ -24,7 +25,7 @@ function ArtifactImage({ path, alt }: { path: string; alt: string }) {
     return () => { cancelled = true; if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, [path]);
   if (error) return <div className="hint">Failed to load image</div>;
-  if (!src) return <div className="hint">Loading image...</div>;
+  if (!src) return <div className="hint">Loading...</div>;
   return <img src={src} alt={alt} />;
 }
 
@@ -85,6 +86,110 @@ function CompareSlider({ beforePath, afterPath, title }: { beforePath: string; a
   );
 }
 
+function hasQualityMetrics(m: RunMetric): boolean {
+  return m.psnr !== null || m.lpips !== null || m.ssim !== null;
+}
+
+function MetricsTable({ metrics }: { metrics: RunMetric[] }) {
+  const hasQuality = metrics.some(hasQualityMetrics);
+  const hasOcr = metrics.some((m) => m.ocr_json.available);
+  const hasFace = metrics.some((m) => m.face_json.available);
+
+  return (
+    <div>
+      {/* Quality Metrics Table */}
+      {hasQuality ? (
+        <>
+          <div className="metric-section-label">QUALITY METRICS</div>
+          <table className="metrics-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>PSNR</th>
+                <th>SSIM</th>
+                <th>LPIPS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((m) => (
+                <tr key={m.model_name}>
+                  <td className="model-name-cell">{m.model_name}</td>
+                  <td className={m.psnr != null ? "metric-value" : "metric-na"}>{fmtMetric(m.psnr, 2)}</td>
+                  <td className={m.ssim != null ? "metric-value" : "metric-na"}>{fmtMetric(m.ssim, 4)}</td>
+                  <td className={m.lpips != null ? "metric-value" : "metric-na"}>{fmtMetric(m.lpips, 4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="metric-hint-box">
+          <div className="metric-section-label">QUALITY METRICS</div>
+          <span className="hint">Select a Quality Reference Image when creating the run to enable PSNR, SSIM, and LPIPS comparison.</span>
+        </div>
+      )}
+
+      {/* OCR Results */}
+      {hasOcr ? (
+        <>
+          <div className="metric-section-label" style={{ marginTop: "1.5rem" }}>OCR EXTRACTION</div>
+          <table className="metrics-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Detected Text</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.filter((m) => m.ocr_json.available).map((m) => (
+                <tr key={m.model_name}>
+                  <td className="model-name-cell">{m.model_name}</td>
+                  <td>{m.ocr_json.text?.trim() || "(no text detected)"}</td>
+                  <td className="metric-value">{m.ocr_json.confidence != null ? `${m.ocr_json.confidence.toFixed(1)}%` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="metric-hint-box" style={{ marginTop: "1.5rem" }}>
+          <div className="metric-section-label">OCR EXTRACTION</div>
+          <span className="hint">{metrics[0]?.ocr_json.note || "Install Tesseract OCR to enable text extraction from enhanced images."}</span>
+        </div>
+      )}
+
+      {/* Face Similarity */}
+      {hasFace ? (
+        <>
+          <div className="metric-section-label" style={{ marginTop: "1.5rem" }}>FACE SIMILARITY</div>
+          <table className="metrics-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Similarity Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.filter((m) => m.face_json.available).map((m) => (
+                <tr key={m.model_name}>
+                  <td className="model-name-cell">{m.model_name}</td>
+                  <td className="metric-value">{fmtMetric(m.face_json.score, 4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="metric-hint-box" style={{ marginTop: "1.5rem" }}>
+          <div className="metric-section-label">FACE SIMILARITY</div>
+          <span className="hint">Select a Face Reference Image when creating the run to enable face similarity scoring.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MetricsPage() {
   const { runId } = useParams();
   const id = Number(runId);
@@ -98,14 +203,13 @@ export function MetricsPage() {
   const isFailed = status?.status === "failed";
   const { data: results } = useRunResults(id, isComplete);
 
-  // SSE for real-time progress
   useRunProgress(id);
 
   const bicubicOutput = results?.outputs.find((o) => o.model_name === "bicubic");
 
   return (
     <section className="card panel">
-      <h2>Run Metrics</h2>
+      <h2>Run Results</h2>
       <DisclaimerBanner />
       {status ? (
         <div className="selected-pill">
@@ -123,11 +227,11 @@ export function MetricsPage() {
       {results ? (
         <div className="grid metrics-grid">
           <section className="card panel">
-            <h3>Outputs</h3>
+            <h3>Enhanced Outputs</h3>
             <ul className="list">
               {results.outputs.map((o) => (
                 <li key={o.model_name}>
-                  <strong>{o.model_name}</strong>
+                  <div className="model-name-cell">{o.model_name}</div>
                   <div className="artifact-grid">
                     <div>
                       <small>Output</small>
@@ -142,13 +246,13 @@ export function MetricsPage() {
                     ) : null}
                     {o.diff_path ? (
                       <div>
-                        <small>Diff</small>
+                        <small>Diff Map</small>
                         <ArtifactImage path={o.diff_path} alt={`${o.model_name} diff`} />
                       </div>
                     ) : null}
                     {o.roi_compare_path ? (
                       <div>
-                        <small>ROI</small>
+                        <small>ROI Detail</small>
                         <ArtifactImage path={o.roi_compare_path} alt={`${o.model_name} roi compare`} />
                       </div>
                     ) : null}
@@ -158,37 +262,8 @@ export function MetricsPage() {
             </ul>
           </section>
           <section className="card panel">
-            <h3>Metrics</h3>
-            <ul className="list">
-              {results.metrics.map((m) => (
-                <li key={m.model_name}>
-                  <strong>{m.model_name}</strong>
-                  <div>PSNR: {fmtMetric(m.psnr, 3)}</div>
-                  <div>LPIPS: {fmtMetric(m.lpips, 4)}</div>
-                  <div>SSIM: {fmtMetric(m.ssim, 4)}</div>
-                  {m.psnr === null && m.lpips === null && m.ssim === null ? (
-                    <small className="hint">Quality metrics need a selected Quality Reference Image.</small>
-                  ) : null}
-                  <div>
-                    OCR:{" "}
-                    {m.ocr_json.available
-                      ? `${m.ocr_json.text?.trim() || "(no text detected)"}`
-                      : "Not computed (install Tesseract OCR to enable)."}
-                  </div>
-                  {m.ocr_json.available ? (
-                    <small className="hint">
-                      OCR confidence: {m.ocr_json.confidence == null ? "N/A" : m.ocr_json.confidence.toFixed(2)}
-                    </small>
-                  ) : null}
-                  <div>
-                    Face:{" "}
-                    {m.face_json.available
-                      ? `Similarity score ${fmtMetric(m.face_json.score, 4)}`
-                      : "Not computed (select a Face Reference Image)."}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <h3>Analysis</h3>
+            <MetricsTable metrics={results.metrics} />
           </section>
         </div>
       ) : null}
