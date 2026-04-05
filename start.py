@@ -106,9 +106,8 @@ def main() -> None:
     # --- Download model weights ---
     WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Lightweight models only (~5MB each) — BSRGAN/x4plus omitted (too heavy for 8GB machines)
     weights = {
-        "BSRGAN.pth": "https://huggingface.co/kadirnar/bsrgan/resolve/main/BSRGAN.pth",
-        "RealESRGAN_x4plus.pth": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
         "realesr-general-x4v3.pth": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
         "realesr-general-wdn-x4v3.pth": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth",
     }

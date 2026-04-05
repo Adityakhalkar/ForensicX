@@ -12,10 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Download model weights if not present
+# Download lightweight model weights only (SRGAN ~8MB, Real-ESRGAN compact ~5MB each)
+# BSRGAN/x4plus omitted — too heavy for 8GB machines
 RUN mkdir -p weights && \
-    (test -f weights/BSRGAN.pth || curl -L -o weights/BSRGAN.pth "https://huggingface.co/kadirnar/bsrgan/resolve/main/BSRGAN.pth") && \
-    (test -f weights/RealESRGAN_x4plus.pth || curl -L -o weights/RealESRGAN_x4plus.pth "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth") && \
     (test -f weights/realesr-general-x4v3.pth || curl -L -o weights/realesr-general-x4v3.pth "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth") && \
     (test -f weights/realesr-general-wdn-x4v3.pth || curl -L -o weights/realesr-general-wdn-x4v3.pth "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth")
 

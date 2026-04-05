@@ -22,6 +22,7 @@ cleanup() {
     [ -n "$BACKEND_PID" ] && kill "$BACKEND_PID" 2>/dev/null
     [ -n "$FRONTEND_PID" ] && kill "$FRONTEND_PID" 2>/dev/null
     wait 2>/dev/null
+    
     log "Done."
 }
 trap cleanup EXIT INT TERM
@@ -74,16 +75,11 @@ download_weight() {
     fi
 }
 
-download_weight "srgan_generator.pth" \
-    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/srgan_generator.pth"
+# Lightweight models only — BSRGAN/x4plus omitted (too heavy for 8GB machines)
 download_weight "realesr-general-x4v3.pth" \
-    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/realesr-general-x4v3.pth"
+    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
 download_weight "realesr-general-wdn-x4v3.pth" \
-    "https://huggingface.co/Adityakhalkar/ForensicX-weights/resolve/main/realesr-general-wdn-x4v3.pth"
-download_weight "RealESRGAN_x4plus.pth" \
-    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
-download_weight "BSRGAN.pth" \
-    "https://huggingface.co/kadirnar/bsrgan/resolve/main/BSRGAN.pth"
+    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth"
 
 # --- Frontend setup ---
 
